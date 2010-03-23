@@ -114,7 +114,7 @@ type Connection interface {
 		If the statement produces results, Execute() returns
 		a cursor; otherwise it returns nil.
 	*/
-	Execute(statement Statement, parameters ...) (Cursor, os.Error);
+	Execute(statement Statement, parameters ...interface{}) (Cursor, os.Error);
 	/*
 		Close() ends the connection to the database system
 		and frees up all internal resources associated with

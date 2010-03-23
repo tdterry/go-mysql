@@ -58,8 +58,7 @@ func init() {
     Open = open;
 }
 
-func version() (data map[string]string, error os.Error)
-{
+func version() (data map[string]string, error os.Error) {
     data = make(map[string]string);
 
     //v := int(C.wm_get_client_version());
@@ -94,14 +93,13 @@ func use(h interface {}) (rval unsafe.Pointer) {
 }
 
 func LastError(mysql C.wmysql) os.Error {
-    if err := C.wm_error(use(mysql)); *err != 0 {
+    if err := C.wm_error(mysql); *err != 0 {
         return os.NewError(C.GoString(err));
     }
     return nil;
 }
 
-func open(info ConnectionInfo) (connection db.Connection, error os.Error)
-{
+func open(info ConnectionInfo) (connection db.Connection, error os.Error) {
     // parse and require check
     host, port, uname, pass, dbname, error := parseConnInfo(info);
     args := []*C.char{
@@ -110,7 +108,7 @@ func open(info ConnectionInfo) (connection db.Connection, error os.Error)
     conn := new (Connection);
     conn.handle = C.wm_init(nil);
     C.wm_real_connect(
-        use(conn.handle),
+        conn.handle,
         args[0],
         args[1],
         args[2],
@@ -138,18 +136,17 @@ func open(info ConnectionInfo) (connection db.Connection, error os.Error)
 */
 func (self *Connection) error() (error os.Error) {
     e := new(DatabaseError);
-    e.basic = int(C.wm_errno(use(self.handle)));
+    e.basic = int(C.wm_errno(self.handle));
     // mysql is not extended error code
     e.extended = 0;
-    e.message = string(C.GoString(C.wm_error(use(self.handle))));
+    e.message = string(C.GoString(C.wm_error(self.handle)));
     return e;
 }
 
 /*
     Precompile query into Statement.
 */
-func (self *Connection) Prepare(query string) (statement db.Statement, error os.Error)
-{
+func (self *Connection) Prepare(query string) (statement db.Statement, error os.Error) {
     s := new(Statement);
     s.query = query;
     s.connection = self;
@@ -162,8 +159,7 @@ func (self *Connection) Prepare(query string) (statement db.Statement, error os.
 /*
     Execute precompiled Statement with given parameters (if any).
 */
-func (self *Connection) Execute(statement db.Statement, parameters ...) (cursor db.Cursor, error os.Error)
-{
+func (self *Connection) Execute(statement db.Statement, parameters ...interface{}) (cursor db.Cursor, error os.Error) {
     self.lock();
 
     s, ok := statement.(*Statement);
@@ -174,7 +170,7 @@ func (self *Connection) Execute(statement db.Statement, parameters ...) (cursor 
     // TODO bind parameter
     query := fmt.Sprintf(s.query, parameters);
     q := C.CString(query);
-    rcode := C.wms_query(use(self.handle), q);
+    rcode := C.wms_query(self.handle, q);
     C.free(unsafe.Pointer(q));
 
     if error = LastError(self.handle); error != nil || rcode != 0 {
@@ -183,8 +179,8 @@ func (self *Connection) Execute(statement db.Statement, parameters ...) (cursor 
         }
         goto UnlockAndReturn;
     }
-    s.nfields = int(C.wfield_count(use(self.handle)));
-    s.handle = C.wm_store_result(use(self.handle));
+    s.nfields = int(C.wfield_count(self.handle));
+    s.handle = C.wm_store_result(self.handle);
     error = LastError(self.handle);
     if error != nil || (s.handle == nil && s.nfields > 0) {
         if error == nil {
@@ -206,7 +202,7 @@ UnlockAndReturn:
 
 
 func (self *Connection) Close() (error os.Error) {
-    C.wm_close(use(self.handle));
+    C.wm_close(self.handle);
     self.handle = nil;
     return;
 }
@@ -219,7 +215,7 @@ func (self *Connection) unlock() { self.queryLock.Unlock() }
 
 func (self *Statement) cleanup() {
     if self.handle != nil {
-        C.wm_free_result(use(self.handle));
+        C.wm_free_result(self.handle);
         self.handle = nil;
         self.nfields = 0;
     }
@@ -228,28 +224,26 @@ func (self *Statement) cleanup() {
 /* === Cursor === */
 
 
-func (self *Cursor) FetchOne() (data []interface {}, error os.Error)
-{
+func (self *Cursor) FetchOne() (data []interface {}, error os.Error) {
     if !self.result {
         error = &InterfaceError{"FetchOne: No results to fetch!"};
         return;
     }
     
-    row := C.wm_fetch_row(use(self.statement.handle));
+    row := C.wm_fetch_row(self.statement.handle);
     error = LastError(self.connection.handle);
 
     if row != nil && error == nil {
         data = make([]interface {}, self.statement.nfields);
         for i := 0; i < self.statement.nfields; i += 1 {
-            data[i] = C.GoString(C.wm_row(use(row), C.int(i)));
+            data[i] = C.GoString(C.wm_row(row, C.int(i)));
         }
     }
 
     return;
 }
 
-func (self *Cursor) FetchMany(count int) (data [][]interface {}, error os.Error)
-{
+func (self *Cursor) FetchMany(count int) (data [][]interface {}, error os.Error) {
     if count == 0 { return nil, os.NewError("Invalid count") }
 
     data = make([][]interface {}, count);
@@ -265,8 +259,7 @@ func (self *Cursor) FetchMany(count int) (data [][]interface {}, error os.Error)
     return;
 }
 
-func (self *Cursor) FetchAll() ([][]interface {}, os.Error)
-{
+func (self *Cursor) FetchAll() ([][]interface {}, os.Error) {
     count := self.RowCount();
     if uint64(MaxFetchCount) <= count {
         return nil, os.NewError("Too many rows in result set. Use Fetch One or FetchMany insted");
@@ -277,20 +270,17 @@ func (self *Cursor) FetchAll() ([][]interface {}, os.Error)
 // Returns the number of rows returned from the current result set.
 func (self *Cursor) RowCount() uint64 {
     if !self.result { return 0 }
-    return uint64(C.wm_num_rows(use(self.statement.handle)));
+    return uint64(C.wm_num_rows(self.statement.handle));
 }
 
-func (self *Cursor) Close() os.Error
-{
+func (self *Cursor) Close() os.Error {
     self.statement.cleanup();
     return nil;
 }
 
 
 
-func parseConnInfo(info ConnectionInfo) (host string, port int, uname string,
-    pass string, dbname string, error os.Error)
-{
+func parseConnInfo(info ConnectionInfo) (host string, port int, uname string, pass string, dbname string, error os.Error) {
     if host, error = getMapStringValue("host", info); error != nil {
         return;
     }
@@ -310,8 +300,7 @@ func parseConnInfo(info ConnectionInfo) (host string, port int, uname string,
     return;
 }
 
-func getMapStringValue(key string, m map[string] Any) (val string, error os.Error)
-{
+func getMapStringValue(key string, m map[string] Any) (val string, error os.Error) {
     ok := false;
     any := Any(nil);
 
@@ -331,8 +320,7 @@ func getMapStringValue(key string, m map[string] Any) (val string, error os.Erro
     return;
 }
 
-func getMapIntValue(key string, m map[string] Any) (val int, error os.Error)
-{
+func getMapIntValue(key string, m map[string] Any) (val int, error os.Error) {
     ok := false;
     any := Any(nil);
 

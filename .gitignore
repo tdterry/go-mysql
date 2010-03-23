@@ -5,3 +5,4 @@ example
 _obj
 *.8
 *.so
+_cgo_*

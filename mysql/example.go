@@ -5,7 +5,7 @@ import (
     "mysql";
     "fmt";
     "os";
-    "rand";
+    //"rand";
 )
 
 func main() {
@@ -20,10 +20,9 @@ func main() {
     info := mysql.ConnectionInfo{ 
         "host": "localhost",
         "port": 3306,
-        "uname": "yone098",
-        "pass": "yone098",
-        "dbname": "golang"
-     };
+        "uname": "travist",
+        "pass": "iw4aolnow",
+        "dbname": "golang" };
     c, e := mysql.Open(info);
     if e != nil {
         fmt.Printf("open error: %s\n", e.String());
@@ -44,12 +43,12 @@ func main() {
         fmt.Printf("error: %s\n", e.String());
         os.Exit(1);
     }
-    fmt.Printf("corsor: %s\n", cur);
+    fmt.Printf("cursor: %s\n", cur);
 
-    fmt.Printf("Inserting 30 random ints");
+    fmt.Printf("Inserting 30 ints\n");
     for i := 0; i < 30; i+=1 {
         s, e = c.Prepare("INSERT INTO __hello (i) values(%d)");
-        cur, e = c.Execute(s, rand.Int());
+        cur, e = c.Execute(s, i+1);
         if e != nil {
             fmt.Printf("insert error: %s\n", e.String());
             os.Exit(1);
@@ -69,7 +68,7 @@ func main() {
         fmt.Printf("error: %s\n", e.String());
         os.Exit(1);
     }
-    fmt.Printf("corsor: %s\n", cur);
+    fmt.Printf("cursor: %s\n", cur);
 
     fmt.Printf("About to fech one row\n");
     tuple, e := cur.FetchOne();
